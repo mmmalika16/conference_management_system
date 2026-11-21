@@ -1,0 +1,179 @@
+CREATE TABLE app_user (
+    user_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    given_name VARCHAR(100) NOT NULL,
+    surname VARCHAR(100) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    affiliation VARCHAR(255) NOT NULL,
+    country VARCHAR(100) NOT NULL,
+    phone_number VARCHAR(30) NOT NULL,
+    CONSTRAINT uq_app_user_email UNIQUE (email)
+);
+
+CREATE TABLE author (
+    author_id INT PRIMARY KEY,
+    orcid VARCHAR(25) NULL,
+    CONSTRAINT fk_author_user FOREIGN KEY (author_id) 
+        REFERENCES app_user(user_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE author_research_area (
+    author_id INT NOT NULL,
+    area_label VARCHAR(100) NOT NULL,
+    PRIMARY KEY (author_id, area_label),
+    CONSTRAINT fk_author_area_author FOREIGN KEY (author_id) 
+        REFERENCES author(author_id) ON DELETE CASCADE
+);
+
+CREATE TABLE reviewer (
+    reviewer_id INT PRIMARY KEY,
+    years_experience INT NOT NULL,
+    CONSTRAINT chk_reviewer_exp CHECK (years_experience >= 0),
+    CONSTRAINT fk_reviewer_user FOREIGN KEY (reviewer_id) 
+        REFERENCES app_user(user_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE reviewer_expertise (
+    reviewer_id INT NOT NULL,
+    area_label VARCHAR(100) NOT NULL,
+    PRIMARY KEY (reviewer_id, area_label),
+    CONSTRAINT fk_reviewer_exp_reviewer FOREIGN KEY (reviewer_id) 
+        REFERENCES reviewer(reviewer_id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE conference (
+    conference_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    acronym VARCHAR(50) NOT NULL,
+    description TEXT NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    country VARCHAR(100) NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    submission_deadline TIMESTAMP NOT NULL,
+    review_deadline TIMESTAMP NOT NULL,
+    CONSTRAINT chk_conf_dates CHECK (end_date >= start_date),
+    CONSTRAINT chk_conf_deadlines CHECK (review_deadline >= submission_deadline)
+);
+
+
+CREATE TABLE conference_host (
+    conference_id INT NOT NULL,
+    host_name VARCHAR(255) NOT NULL,
+    PRIMARY KEY (conference_id, host_name),
+    CONSTRAINT fk_host_conf FOREIGN KEY (conference_id) 
+        REFERENCES conference(conference_id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE conference_reviewer (
+    conference_id INT NOT NULL,
+    reviewer_id INT NOT NULL,
+    PRIMARY KEY (conference_id, reviewer_id),
+    CONSTRAINT fk_conf_rev_conf FOREIGN KEY (conference_id) 
+        REFERENCES conference(conference_id) ON DELETE CASCADE,
+    CONSTRAINT fk_conf_rev_reviewer FOREIGN KEY (reviewer_id) 
+        REFERENCES reviewer(reviewer_id) ON DELETE RESTRICT
+);
+
+
+CREATE TABLE track (
+    track_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conference_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    description TEXT NOT NULL,
+    research_area VARCHAR(100) NOT NULL,
+    coordinator_id INT NOT NULL,
+    CONSTRAINT fk_track_conf FOREIGN KEY (conference_id) 
+        REFERENCES conference(conference_id) ON DELETE CASCADE,
+    CONSTRAINT fk_track_coord FOREIGN KEY (coordinator_id) 
+        REFERENCES reviewer(reviewer_id) ON DELETE RESTRICT
+);
+
+
+CREATE TABLE conference_session (
+    session_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conference_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    session_date DATE NOT NULL,
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
+    room_label VARCHAR(50) NOT NULL,
+    chair_id INT NOT NULL,
+    CONSTRAINT chk_session_times CHECK (end_time > start_time),
+    CONSTRAINT fk_session_conf FOREIGN KEY (conference_id) 
+        REFERENCES conference(conference_id) ON DELETE CASCADE,
+    CONSTRAINT fk_session_chair FOREIGN KEY (chair_id) 
+        REFERENCES reviewer(reviewer_id) ON DELETE RESTRICT
+);
+
+
+
+CREATE TABLE paper (
+    paper_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    track_id INT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    abstract TEXT NOT NULL,
+    submission_date TIMESTAMP NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'Submitted',
+    session_id INT NULL,
+    CONSTRAINT chk_paper_status CHECK (status IN ('Submitted', 'Under Review', 'Accepted', 'Rejected', 'Withdrawn')),
+    CONSTRAINT fk_paper_track FOREIGN KEY (track_id) 
+        REFERENCES track(track_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_paper_session FOREIGN KEY (session_id) 
+        REFERENCES conference_session(session_id) ON DELETE SET NULL
+);
+
+CREATE TABLE paper_keyword (
+    paper_id INT NOT NULL,
+    keyword VARCHAR(100) NOT NULL,
+    PRIMARY KEY (paper_id, keyword),
+    CONSTRAINT fk_keyword_paper FOREIGN KEY (paper_id) 
+        REFERENCES paper(paper_id) ON DELETE CASCADE
+);
+
+CREATE TABLE paper_author (
+    paper_id INT NOT NULL,
+    author_id INT NOT NULL,
+    author_position INT NOT NULL,
+    is_corresponding BOOLEAN NOT NULL DEFAULT FALSE,
+    PRIMARY KEY (paper_id, author_id),
+    CONSTRAINT uq_paper_author_pos UNIQUE (paper_id, author_position),
+    CONSTRAINT chk_author_pos CHECK (author_position >= 1),
+    CONSTRAINT fk_paper_author_paper FOREIGN KEY (paper_id) 
+        REFERENCES paper(paper_id) ON DELETE CASCADE,
+    CONSTRAINT fk_paper_author_author FOREIGN KEY (author_id) 
+        REFERENCES author(author_id) ON DELETE RESTRICT
+);
+
+CREATE TABLE paper_version (
+    paper_id INT NOT NULL,
+    version_no INT NOT NULL,
+    file_location VARCHAR(500) NOT NULL,
+    uploaded_at TIMESTAMP NOT NULL,
+    change_note TEXT NULL,
+    PRIMARY KEY (paper_id, version_no),
+    CONSTRAINT chk_version_no CHECK (version_no >= 1),
+    -- Required: Deleting a paper must cascade to its versions
+    CONSTRAINT fk_version_paper FOREIGN KEY (paper_id) 
+        REFERENCES paper(paper_id) ON DELETE CASCADE
+);
+
+
+CREATE TABLE review (
+    review_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    paper_id INT NOT NULL,
+    reviewer_id INT NOT NULL,
+    overall_score NUMERIC(3,1) NOT NULL,
+    recommendation VARCHAR(50) NOT NULL,
+    comments_for_authors TEXT NOT NULL,
+    confidential_comments TEXT NULL,
+    review_submission_date TIMESTAMP NOT NULL,
+    CONSTRAINT uq_review_paper_reviewer UNIQUE (paper_id, reviewer_id),
+    CONSTRAINT chk_review_score CHECK (overall_score BETWEEN 1.0 AND 10.0),
+    CONSTRAINT chk_review_rec CHECK (recommendation IN ('Strong Accept', 'Accept', 'Weak Accept', 'Borderline', 'Reject')),
+    CONSTRAINT fk_review_paper FOREIGN KEY (paper_id) 
+        REFERENCES paper(paper_id) ON DELETE CASCADE,
+    CONSTRAINT fk_review_reviewer FOREIGN KEY (reviewer_id) 
+        REFERENCES reviewer(reviewer_id) ON DELETE RESTRICT
+);
