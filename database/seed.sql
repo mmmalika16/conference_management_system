@@ -1,0 +1,1 @@
+-- Seed data for the conference management system.
