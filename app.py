@@ -29,25 +29,20 @@ def empty_to_none(value):
 
 
 def check_session_assignment(conn, track_id, status, session_id):
-    """Validate paper scheduling at every paper save.
-
-    This is application-level validation; the database intentionally stores
-    PAPER.session_id and lets the application enforce status/conference rules.
-    """
     if not session_id:
         return
     if status != "accepted":
         raise ValueError("Only accepted papers can be assigned to a session.")
-    track_conf = conn.execute(text("SELECT conference_id FROM track WHERE track_id = :t"),
-                              {"t": track_id}).scalar()
-    session_conf = conn.execute(text("SELECT conference_id FROM conference_session WHERE session_id = :s"),
-                                {"s": session_id}).scalar()
-    if track_conf is None:
-        raise ValueError("The selected track does not exist.")
-    if session_conf is None:
-        raise ValueError("The selected session does not exist.")
-    if track_conf != session_conf:
-        raise ValueError("The paper's track and the session must belong to the same conference.")
+    track = conn.execute(text("SELECT name, conference_id FROM track WHERE track_id = :t"),
+                         {"t": track_id}).mappings().one()
+    session = conn.execute(text("SELECT title, conference_id FROM conference_session WHERE session_id = :s"),
+                           {"s": session_id}).mappings().one()
+    if track["conference_id"] != session["conference_id"]:
+        raise ValueError("The paper's track and the session belong to different conferences.")
+    if track["name"].strip().lower() != session["title"].strip().lower():
+        raise ValueError(
+            f"Track '{track['name']}' does not match session '{session['title']}'."
+        )
 
 
 def check_not_self_review(conn, paper_id, reviewer_id):
@@ -80,6 +75,8 @@ def user_form(user_id=None):
         is_author = "is_author" in f
         is_reviewer = "is_reviewer" in f
         try:
+            if not valid_email(f["email"]):
+                raise ValueError("Please enter a valid email address.")
             if not is_author and not is_reviewer:
                 raise ValueError("A user must be an author, a reviewer, or both.")
             with engine.begin() as conn:
@@ -127,7 +124,16 @@ def user_form(user_id=None):
             return redirect(url_for("users"))
         except Exception as e:
             flash("Error: " + error_text(e))
-            return redirect(request.url)
+            invalid_fields = ["email"] if not valid_email(f["email"]) else []
+            form_data = preserve_form(f, invalid_fields)
+            # Load the same options/metadata used by the GET view.
+            user = form_data
+            author = {"orcid": form_data.get("orcid", "")} if is_author else None
+            reviewer = {"years_experience": form_data.get("years_experience", 0)} if is_reviewer else None
+            areas = form_data.get("research_areas", "")
+            expertise = form_data.get("expertise", "")
+            return render_template("user_form.html", user=user, author=author, reviewer=reviewer,
+                                   areas=areas, expertise=expertise)
 
     user, author, reviewer, areas, expertise = None, None, None, "", ""
     if user_id is not None:
@@ -196,16 +202,24 @@ def paper_form(paper_id=None):
             return redirect(url_for("paper_detail", paper_id=paper_id))
         except Exception as e:
             flash("Error: " + error_text(e))
-            return redirect(request.url)
+            submitted = preserve_form(f)
+            tracks = query("""SELECT t.track_id, t.name, c.acronym FROM track t
+                              JOIN conference c ON c.conference_id = t.conference_id ORDER BY t.track_id""")
+            sessions = query("""SELECT s.session_id, s.title, c.acronym FROM conference_session s
+                                JOIN conference c ON c.conference_id = s.conference_id ORDER BY s.session_id""")
+            paper = submitted
+            return render_template("paper_form.html", paper=paper,
+                                   submitted=submitted, keywords=submitted.get("keywords", ""),
+                                   tracks=tracks, sessions=sessions, statuses=STATUSES)
 
     paper, keywords = None, ""
     if paper_id is not None:
         paper = query_one("SELECT * FROM paper WHERE paper_id = :id", {"id": paper_id})
         keywords = ", ".join(r["keyword"] for r in
                              query("SELECT keyword FROM paper_keyword WHERE paper_id = :id", {"id": paper_id}))
-    tracks = query("""SELECT t.track_id, t.name, t.conference_id, c.acronym FROM track t
+    tracks = query("""SELECT t.track_id, t.name, c.acronym FROM track t
                       JOIN conference c ON c.conference_id = t.conference_id ORDER BY t.track_id""")
-    sessions = query("""SELECT s.session_id, s.title, s.conference_id, c.acronym FROM conference_session s
+    sessions = query("""SELECT s.session_id, s.title, c.acronym FROM conference_session s
                         JOIN conference c ON c.conference_id = s.conference_id ORDER BY s.session_id""")
     return render_template("paper_form.html", paper=paper, keywords=keywords,
                            tracks=tracks, sessions=sessions, statuses=STATUSES)
@@ -362,7 +376,13 @@ def review_form(review_id=None):
             return redirect(url_for("reviews"))
         except Exception as e:
             flash("Error: " + error_text(e))
-            return redirect(request.url)
+            submitted = preserve_form(f)
+            review = submitted
+            papers_list = query("SELECT paper_id, title FROM paper ORDER BY paper_id")
+            reviewers = query("""SELECT r.reviewer_id, u.given_name, u.surname FROM reviewer r
+                                 JOIN app_user u ON u.user_id = r.reviewer_id ORDER BY r.reviewer_id""")
+            return render_template("review_form.html", review=review, submitted=submitted,
+                                   papers=papers_list, reviewers=reviewers)
 
     review = None
     if review_id is not None:
@@ -419,19 +439,13 @@ def session_form(session_id=None):
                                                         end_time, room_label, chair_id)
                         VALUES (:conf, :title, :date, :start, :end, :room, :chair)"""), params)
                 else:
-                    invalid_paper = conn.execute(text("""
-                        SELECT p.paper_id
-                        FROM paper p JOIN track t ON t.track_id = p.track_id
-                        WHERE p.session_id = :id
-                          AND (p.status <> 'accepted' OR t.conference_id <> :conf)
-                        ORDER BY p.paper_id
-                        LIMIT 1"""),
-                                                {"id": session_id, "conf": params["conf"]}).scalar()
-                    if invalid_paper is not None:
-                        raise ValueError(
-                            f"Paper {invalid_paper} cannot remain scheduled: it must be accepted and "
-                            "its track must belong to the session's conference. Remove or reassign it first."
-                        )
+                    bad = conn.execute(text("""
+                        SELECT COUNT(*) FROM paper p JOIN track t ON t.track_id = p.track_id
+                        WHERE p.session_id = :id AND t.conference_id <> :conf"""),
+                                       {"id": session_id, "conf": params["conf"]}).scalar()
+                    if bad > 0:
+                        raise ValueError("Papers assigned to this session belong to another conference. "
+                                         "Remove them from the session first.")
                     params["id"] = session_id
                     conn.execute(text("""
                         UPDATE conference_session SET conference_id = :conf, title = :title,
@@ -442,7 +456,13 @@ def session_form(session_id=None):
             return redirect(url_for("sessions"))
         except Exception as e:
             flash("Error: " + error_text(e))
-            return redirect(request.url)
+            submitted = preserve_form(f)
+            session = submitted
+            conferences = query("SELECT conference_id, acronym, city FROM conference ORDER BY conference_id")
+            reviewers = query("""SELECT r.reviewer_id, u.given_name, u.surname FROM reviewer r
+                                 JOIN app_user u ON u.user_id = r.reviewer_id ORDER BY r.reviewer_id""")
+            return render_template("session_form.html", session=session, submitted=submitted,
+                                   conferences=conferences, reviewers=reviewers)
 
     session = None
     if session_id is not None:
@@ -462,6 +482,18 @@ def session_delete(session_id):
     except Exception as e:
         flash("Error: " + error_text(e))
     return redirect(url_for("sessions"))
+
+
+def preserve_form(form, invalid_fields=None):
+    data = form.to_dict()
+    for field in invalid_fields or ():
+        data[field] = ""
+    return data
+
+
+def valid_email(email):
+    email = email.strip()
+    return "@" in email and "." in email.rsplit("@", 1)[-1]
 
 
 if __name__ == "__main__":
