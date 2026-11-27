@@ -3,9 +3,9 @@
 <h2>{{ 'Edit paper ' ~ paper.paper_id if paper else 'New paper' }}</h2>
 <form method="post">
   <label>Track
-    <select name="track_id">
+    <select name="track_id" id="track_id">
       {% for t in tracks %}
-      <option value="{{ t.track_id }}" {{ 'selected' if paper and paper.track_id == t.track_id }}>{{ t.acronym }} - {{ t.name }}</option>
+      <option value="{{ t.track_id }}" data-conference-id="{{ t.conference_id }}" {{ 'selected' if paper and paper.track_id == t.track_id }}>{{ t.acronym }} - {{ t.name }}</option>
       {% endfor %}
     </select>
   </label>
@@ -16,22 +16,60 @@
            value="{{ paper.submission_date.strftime('%Y-%m-%dT%H:%M') if paper else '' }}">
   </label>
   <label>Status
-    <select name="status">
+    <select name="status" id="paper_status">
       {% for s in statuses %}
       <option value="{{ s }}" {{ 'selected' if paper and paper.status == s }}>{{ s }}</option>
       {% endfor %}
     </select>
   </label>
   <label>Session (only for accepted papers)
-    <select name="session_id">
+    <select name="session_id" id="session_id">
       <option value="">-- none --</option>
       {% for s in sessions %}
-      <option value="{{ s.session_id }}" {{ 'selected' if paper and paper.session_id == s.session_id }}>{{ s.acronym }} - {{ s.title }}</option>
+      <option value="{{ s.session_id }}" data-conference-id="{{ s.conference_id }}" {{ 'selected' if paper and paper.session_id == s.session_id }}>{{ s.acronym }} - {{ s.title }}</option>
       {% endfor %}
     </select>
   </label>
+  <small id="session_assignment_hint">Only accepted papers may be scheduled in a session from the selected track's conference.</small>
   <label>Keywords (comma separated) <input name="keywords" size="60" value="{{ keywords }}"></label>
   <br>
   <button>Save</button>
+
+  <script>
+    const trackSelect = document.getElementById('track_id');
+    const statusSelect = document.getElementById('paper_status');
+    const sessionSelect = document.getElementById('session_id');
+    const hint = document.getElementById('session_assignment_hint');
+
+    function filterSessionAssignments() {
+      const track = trackSelect.options[trackSelect.selectedIndex];
+      const conferenceId = track ? track.dataset.conferenceId : null;
+      const accepted = statusSelect.value === 'accepted';
+      Array.from(sessionSelect.options).forEach(option => {
+        if (!option.value) {
+          option.hidden = false;
+          return;
+        }
+        const compatible = accepted && option.dataset.conferenceId === conferenceId;
+        option.hidden = !compatible;
+        option.disabled = !compatible;
+        if (!compatible && option.selected) {
+          option.selected = false;
+          sessionSelect.value = '';
+        }
+      });
+
+      hint.textContent = accepted
+        ? 'Session options are limited to sessions in the selected track\'s conference.'
+        : 'Only accepted papers may be assigned to a session; the session will be cleared.';
+      if (!accepted && sessionSelect.value) {
+        sessionSelect.value = '';
+      }
+    }
+
+    trackSelect.addEventListener('change', filterSessionAssignments);
+    statusSelect.addEventListener('change', filterSessionAssignments);
+    filterSessionAssignments();
+  </script>
 </form>
 {% endblock %}

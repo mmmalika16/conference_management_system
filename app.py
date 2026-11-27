@@ -29,6 +29,11 @@ def empty_to_none(value):
 
 
 def check_session_assignment(conn, track_id, status, session_id):
+    """Validate paper scheduling at every paper save.
+
+    This is application-level validation; the database intentionally stores
+    PAPER.session_id and lets the application enforce status/conference rules.
+    """
     if not session_id:
         return
     if status != "accepted":
@@ -37,8 +42,12 @@ def check_session_assignment(conn, track_id, status, session_id):
                               {"t": track_id}).scalar()
     session_conf = conn.execute(text("SELECT conference_id FROM conference_session WHERE session_id = :s"),
                                 {"s": session_id}).scalar()
+    if track_conf is None:
+        raise ValueError("The selected track does not exist.")
+    if session_conf is None:
+        raise ValueError("The selected session does not exist.")
     if track_conf != session_conf:
-        raise ValueError("The paper's track and the session belong to different conferences.")
+        raise ValueError("The paper's track and the session must belong to the same conference.")
 
 
 def check_not_self_review(conn, paper_id, reviewer_id):
@@ -194,9 +203,9 @@ def paper_form(paper_id=None):
         paper = query_one("SELECT * FROM paper WHERE paper_id = :id", {"id": paper_id})
         keywords = ", ".join(r["keyword"] for r in
                              query("SELECT keyword FROM paper_keyword WHERE paper_id = :id", {"id": paper_id}))
-    tracks = query("""SELECT t.track_id, t.name, c.acronym FROM track t
+    tracks = query("""SELECT t.track_id, t.name, t.conference_id, c.acronym FROM track t
                       JOIN conference c ON c.conference_id = t.conference_id ORDER BY t.track_id""")
-    sessions = query("""SELECT s.session_id, s.title, c.acronym FROM conference_session s
+    sessions = query("""SELECT s.session_id, s.title, s.conference_id, c.acronym FROM conference_session s
                         JOIN conference c ON c.conference_id = s.conference_id ORDER BY s.session_id""")
     return render_template("paper_form.html", paper=paper, keywords=keywords,
                            tracks=tracks, sessions=sessions, statuses=STATUSES)
@@ -410,13 +419,19 @@ def session_form(session_id=None):
                                                         end_time, room_label, chair_id)
                         VALUES (:conf, :title, :date, :start, :end, :room, :chair)"""), params)
                 else:
-                    bad = conn.execute(text("""
-                        SELECT COUNT(*) FROM paper p JOIN track t ON t.track_id = p.track_id
-                        WHERE p.session_id = :id AND t.conference_id <> :conf"""),
-                                       {"id": session_id, "conf": params["conf"]}).scalar()
-                    if bad > 0:
-                        raise ValueError("Papers assigned to this session belong to another conference. "
-                                         "Remove them from the session first.")
+                    invalid_paper = conn.execute(text("""
+                        SELECT p.paper_id
+                        FROM paper p JOIN track t ON t.track_id = p.track_id
+                        WHERE p.session_id = :id
+                          AND (p.status <> 'accepted' OR t.conference_id <> :conf)
+                        ORDER BY p.paper_id
+                        LIMIT 1"""),
+                                                {"id": session_id, "conf": params["conf"]}).scalar()
+                    if invalid_paper is not None:
+                        raise ValueError(
+                            f"Paper {invalid_paper} cannot remain scheduled: it must be accepted and "
+                            "its track must belong to the session's conference. Remove or reassign it first."
+                        )
                     params["id"] = session_id
                     conn.execute(text("""
                         UPDATE conference_session SET conference_id = :conf, title = :title,
