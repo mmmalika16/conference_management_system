@@ -1,3 +1,3 @@
-Video presentation: https://drive.google.com/file/d/1UDrTFS5zGgFioW-700qbFzp-4lCGqlou/view?usp=sharing
+Video presentation: 
 
-Deployment link: https://conference-management-system-4caf.onrender.com/
+Deployed web application: 

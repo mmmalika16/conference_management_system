@@ -589,4 +589,3 @@ ALTER TABLE ONLY public.paper_version
 
 
 \unrestrict PAaIbarStepPtM8jp1th4gMsNVbUTVyU8EEygQZLWfX38rPlI5P2SI1p2z5VXfa
-
