@@ -12,6 +12,7 @@ gunicorn - 23.0.0
 ## How to run
 
 ```bash
+# For 1st Task
 sudo -u postgres psql
 CREATE DATABASE conference_part1_db;
 PGPASSWORD=123456 psql -h localhost -U postgres -d conference_part1_db -f schema.sql
@@ -22,22 +23,36 @@ sudo -u postgres psql
 CREATE DATABASE conference_db;
 source ~/venv/bin/activate
 export DATABASE_URL="postgresql://postgres:123456@localhost:5432/conference_db"
-python setup_db.py     # for the 2 Task, 1-2 tasks
-python queries.py     
-python app.py   
+python setup_db.py     # for Task 2, 1-2 parts
+python queries.py     # for Task 2, 3-8 parts       #output will be copied to output.txt
+python app.py   # Task 3 run web
 ```
 
-## Assignment validation rules
+## Schema
 
-The application enforces these rules:
+- users
+- sessions 
+- papers
+- reviews. 
 
-- A reviewer cannot review a paper they authored. This is checked when a review is created or changed and when an author is added to a paper.
-- A paper with a session must be accepted, and its track and session must belong to the same conference. Paper status, track, and session changes are checked when saving a paper.
-- Changing a session's conference is rejected when a scheduled paper would become invalid (the paper is not accepted or the paper track belongs to another conference).
-- The chair of a session must belong to that conference's reviewer pool.
-- A user must have at least one of the author or reviewer roles.
-- A paper is prevented from having more than one corresponding author in the paper author form.
-- Track coordinators and session chairs are stored as reviewers and checked against conference membership where the application exposes those entities.
+## Keys
+- user_id
+- author_id
+- reviewer_id
+- conference_id
+- track_id
+- session_id
+- paper_id
+- review_id
 
-Other optional data rules documented for the sample data include: every paper has at least one author and exactly one corresponding author, user roles are represented by the `author` and `reviewer` tables, and the conference reviewer pool is used for coordinators and chairs.
+## Required checks
+- check unique values, so they are unique
+- check that primary and foreign keys are not null
+- no self-reviews
+- paper must be accepted, and its track and session must belong to the same conference
 
+## Optional Business rules
+- Every user has at least one role.
+- Include author-only, reviewer-only, and users with both roles.
+- Every paper has exactly one corresponding author.
+- Coordinators and chairs belong to their conference's reviewer pool.
