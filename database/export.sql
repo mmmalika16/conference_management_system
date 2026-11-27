@@ -1,1 +1,0 @@
--- Database export for the conference management system.

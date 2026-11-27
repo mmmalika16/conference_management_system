@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Conference Management System</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; margin-bottom: 15px; }
+    th, td { border: 1px solid #999; padding: 4px 8px; }
+    .msg { background: #ffe; border: 1px solid #cc0; padding: 6px; margin-bottom: 10px; }
+    form.inline { display: inline; }
+    label { display: block; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <a href="/">Home</a> |
+  <a href="{{ url_for('users') }}">Users</a> |
+  <a href="{{ url_for('papers') }}">Papers</a> |
+  <a href="{{ url_for('reviews') }}">Reviews</a> |
+  <a href="{{ url_for('sessions') }}">Sessions</a>
+  <hr>
+  {% for m in get_flashed_messages() %}
+    <div class="msg">{{ m }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</body>
+</html>

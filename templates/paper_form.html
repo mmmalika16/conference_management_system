@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Edit paper ' ~ paper.paper_id if paper else 'New paper' }}</h2>
+<form method="post">
+  <label>Track
+    <select name="track_id">
+      {% for t in tracks %}
+      <option value="{{ t.track_id }}" {{ 'selected' if paper and paper.track_id == t.track_id }}>{{ t.acronym }} - {{ t.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Title <input name="title" size="60" value="{{ paper.title if paper else '' }}" required></label>
+  <label>Abstract <br><textarea name="abstract" rows="4" cols="60" required>{{ paper.abstract if paper else '' }}</textarea></label>
+  <label>Submission date
+    <input name="submission_date" type="datetime-local" required
+           value="{{ paper.submission_date.strftime('%Y-%m-%dT%H:%M') if paper else '' }}">
+  </label>
+  <label>Status
+    <select name="status">
+      {% for s in statuses %}
+      <option value="{{ s }}" {{ 'selected' if paper and paper.status == s }}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Session (only for accepted papers)
+    <select name="session_id">
+      <option value="">-- none --</option>
+      {% for s in sessions %}
+      <option value="{{ s.session_id }}" {{ 'selected' if paper and paper.session_id == s.session_id }}>{{ s.acronym }} - {{ s.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Keywords (comma separated) <input name="keywords" size="60" value="{{ keywords }}"></label>
+  <br>
+  <button>Save</button>
+</form>
+{% endblock %}

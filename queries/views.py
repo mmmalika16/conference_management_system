@@ -1,1 +1,0 @@
-"""Database view definitions."""

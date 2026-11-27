@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Edit review ' ~ review.review_id if review else 'New review' }}</h2>
+<form method="post">
+  <label>Paper
+    <select name="paper_id">
+      {% for p in papers %}
+      <option value="{{ p.paper_id }}" {{ 'selected' if review and review.paper_id == p.paper_id }}>{{ p.paper_id }} - {{ p.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Reviewer
+    <select name="reviewer_id">
+      {% for r in reviewers %}
+      <option value="{{ r.reviewer_id }}" {{ 'selected' if review and review.reviewer_id == r.reviewer_id }}>{{ r.given_name }} {{ r.surname }} (id {{ r.reviewer_id }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Overall score (1-5) <input name="overall_score" type="number" value="{{ review.overall_score if review else 3 }}" required></label>
+  <label>Recommendation
+    <select name="recommendation">
+      {% for rec in ['accept', 'reject'] %}
+      <option value="{{ rec }}" {{ 'selected' if review and review.recommendation == rec }}>{{ rec }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Comments for authors <br><textarea name="comments_for_authors" rows="3" cols="60" required>{{ review.comments_for_authors if review else '' }}</textarea></label>
+  <label>Confidential comments <br><textarea name="confidential_comments" rows="2" cols="60">{{ review.confidential_comments or '' if review else '' }}</textarea></label>
+  <label>Submission date
+    <input name="review_submission_date" type="datetime-local" required
+           value="{{ review.review_submission_date.strftime('%Y-%m-%dT%H:%M') if review else '' }}">
+  </label>
+  <br>
+  <button>Save</button>
+</form>
+{% endblock %}

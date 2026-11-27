@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Paper {{ paper.paper_id }}: {{ paper.title }}</h2>
+<p>
+  <b>Status:</b> {{ paper.status }} |
+  <b>Track:</b> {{ paper.track_name }} ({{ paper.acronym }}) |
+  <b>Session:</b> {{ paper.session_title or 'none' }} |
+  <a href="{{ url_for('paper_form', paper_id=paper.paper_id) }}">Edit paper</a>
+</p>
+<p><b>Abstract:</b> {{ paper.abstract }}</p>
+<p><b>Keywords:</b> {% for k in keywords %}{{ k.keyword }}{{ ', ' if not loop.last }}{% endfor %}</p>
+
+<h3>Authors</h3>
+<table>
+  <tr><th>Position</th><th>Author</th><th>Corresponding</th><th></th></tr>
+  {% for a in authors %}
+  <tr>
+    <td>{{ a.author_position }}</td>
+    <td>{{ a.given_name }} {{ a.surname }} (id {{ a.author_id }})</td>
+    <td>{{ 'yes' if a.is_corresponding else '' }}</td>
+    <td>
+      <form class="inline" method="post" action="{{ url_for('paper_author_delete', paper_id=paper.paper_id, author_id=a.author_id) }}">
+        <button>Remove</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<form method="post" action="{{ url_for('paper_author_add', paper_id=paper.paper_id) }}">
+  Add author:
+  <select name="author_id">
+    {% for a in all_authors %}
+    <option value="{{ a.author_id }}">{{ a.given_name }} {{ a.surname }} (id {{ a.author_id }})</option>
+    {% endfor %}
+  </select>
+  Position <input name="author_position" type="number" min="1" value="{{ authors|length + 1 }}" style="width:50px">
+  <input type="checkbox" name="is_corresponding"> Corresponding
+  <button>Add</button>
+</form>
+
+<h3>Versions</h3>
+<table>
+  <tr><th>Version</th><th>File location</th><th>Uploaded at</th><th>Note</th><th></th></tr>
+  {% for v in versions %}
+  <tr>
+    <td>{{ v.version_no }}</td>
+    <td>{{ v.file_location }}</td>
+    <td>{{ v.uploaded_at }}</td>
+    <td>{{ v.change_note or '' }}</td>
+    <td>
+      <form class="inline" method="post" action="{{ url_for('paper_version_delete', paper_id=paper.paper_id, version_no=v.version_no) }}">
+        <button>Delete</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+<form method="post" action="{{ url_for('paper_version_add', paper_id=paper.paper_id) }}">
+  Add version: No <input name="version_no" type="number" min="1" value="{{ next_version }}" style="width:50px">
+  File location <input name="file_location" value="paper_version/p{{ paper.paper_id }}_v{{ next_version }}.pdf" required>
+  Note <input name="change_note">
+  <button>Add</button>
+</form>
+
+<h3>Reviews</h3>
+<table>
+  <tr><th>ID</th><th>Reviewer</th><th>Score</th><th>Recommendation</th></tr>
+  {% for r in reviews %}
+  <tr><td>{{ r.review_id }}</td><td>{{ r.given_name }} {{ r.surname }}</td><td>{{ r.overall_score }}</td><td>{{ r.recommendation }}</td></tr>
+  {% endfor %}
+</table>
+{% endblock %}

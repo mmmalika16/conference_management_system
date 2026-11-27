@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Reviews</h2>
+<a href="{{ url_for('review_form') }}">+ New review</a>
+<table>
+  <tr><th>ID</th><th>Paper</th><th>Reviewer</th><th>Score</th><th>Recommendation</th><th>Comments</th><th>Date</th><th></th></tr>
+  {% for r in reviews %}
+  <tr>
+    <td>{{ r.review_id }}</td>
+    <td>{{ r.paper_id }} - {{ r.title }}</td>
+    <td>{{ r.given_name }} {{ r.surname }}</td>
+    <td>{{ r.overall_score }}</td>
+    <td>{{ r.recommendation }}</td>
+    <td>{{ r.comments_for_authors }}</td>
+    <td>{{ r.review_submission_date }}</td>
+    <td>
+      <a href="{{ url_for('review_form', review_id=r.review_id) }}">Edit</a>
+      <form class="inline" method="post" action="{{ url_for('review_delete', review_id=r.review_id) }}">
+        <button>Delete</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

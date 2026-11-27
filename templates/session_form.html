@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Edit session ' ~ session.session_id if session else 'New session' }}</h2>
+<form method="post">
+  <label>Conference
+    <select name="conference_id">
+      {% for c in conferences %}
+      <option value="{{ c.conference_id }}" {{ 'selected' if session and session.conference_id == c.conference_id }}>{{ c.acronym }} ({{ c.city }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Title <input name="title" value="{{ session.title if session else '' }}" required></label>
+  <label>Date <input name="session_date" type="date" value="{{ session.session_date if session else '' }}" required></label>
+  <label>Start time <input name="start_time" type="time" value="{{ session.start_time.strftime('%H:%M') if session else '' }}" required></label>
+  <label>End time <input name="end_time" type="time" value="{{ session.end_time.strftime('%H:%M') if session else '' }}" required></label>
+  <label>Room <input name="room_label" value="{{ session.room_label if session else '' }}" required></label>
+  <label>Chair (must be in the conference reviewer pool)
+    <select name="chair_id">
+      {% for r in reviewers %}
+      <option value="{{ r.reviewer_id }}" {{ 'selected' if session and session.chair_id == r.reviewer_id }}>{{ r.given_name }} {{ r.surname }} (id {{ r.reviewer_id }})</option>
+      {% endfor %}
+    </select>
+  </label>
+  <br>
+  <button>Save</button>
+</form>
+{% endblock %}
